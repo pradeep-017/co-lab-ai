@@ -13,11 +13,13 @@ const Container = styled.div`
 
 const ChatBox = styled.div`
   width: 60%;
-  max-width: 600px;
+  max-width: 800px;
   background-color: #fff;
   padding: 20px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
+  overflow-y: auto;
+  max-height: 80vh;
 `;
 
 const Title = styled.h1`
@@ -26,16 +28,16 @@ const Title = styled.h1`
   text-align: center;
 `;
 
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+const Message = styled.div`
+  margin: 10px 0;
 `;
 
 const Input = styled.input`
   padding: 10px;
+  margin-bottom: 10px;
   border: 1px solid #ccc;
   border-radius: 4px;
+  width: calc(100% - 22px);
 `;
 
 const Button = styled.button`
@@ -58,30 +60,44 @@ const SolutionBlock = styled.div`
   border-radius: 4px;
 `;
 
-function App() {
+const Chat = () => {
+  const [messages, setMessages] = useState([]);
   const [ref, setRef] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [solution, setSolution] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    axios.post('http://127.0.0.1:5000/api/solve', { ref, prompt })
-      .then(response => {
-        setSolution(response.data.solution);
-      })
-      .catch(error => {
-        console.error("There was an error!", error);
-      });
+    if (!ref || !prompt) return;
+
+    const userMessage = { ref, prompt };
+    setMessages([...messages, userMessage]);
+    setRef('');
+    setPrompt('');
+
+    try {
+      const response = await axios.post('http://127.0.0.1:5000/api/solve', { ref, prompt });
+      const solution = { solution: response.data.solution };
+      setMessages([...messages, userMessage, solution]);
+    } catch (error) {
+      console.error("There was an error!", error);
+    }
   };
 
   return (
     <Container>
       <ChatBox>
         <Title>Chatbot</Title>
-        <Form onSubmit={handleSubmit}>
+        {messages.map((msg, index) => (
+          <Message key={index}>
+            {msg.ref && <p><strong>Ref:</strong> {msg.ref}</p>}
+            {msg.prompt && <p><strong>Prompt:</strong> {msg.prompt}</p>}
+            {msg.solution && <SolutionBlock><strong>Solution:</strong> {msg.solution}</SolutionBlock>}
+          </Message>
+        ))}
+        <form onSubmit={handleSubmit}>
           <Input
             type="text"
-            placeholder="Ref"
+            placeholder="Reference"
             value={ref}
             onChange={(e) => setRef(e.target.value)}
           />
@@ -92,16 +108,14 @@ function App() {
             onChange={(e) => setPrompt(e.target.value)}
           />
           <Button type="submit">Submit</Button>
-        </Form>
-        {solution && (
-          <SolutionBlock>
-            <strong>Solution:</strong>
-            <p>{solution}</p>
-          </SolutionBlock>
-        )}
+        </form>
       </ChatBox>
     </Container>
   );
-}
+};
+
+const App = () => (
+  <Chat />
+);
 
 export default App;
