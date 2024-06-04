@@ -1,2 +1,2 @@
-# co-lab-ai
+# coLab-ai
 AI Tool for Collaboration on everything you do
