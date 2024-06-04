@@ -3,12 +3,15 @@ from flask_cors import CORS
 
 from dotenv import load_dotenv
 import os
-from langchain.vectorstores import FAISS
+from langchain_text_splitters import RecursiveCharacterTextSplitter, HTMLHeaderTextSplitter
+# from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OctoAIEmbeddings
 from langchain_community.llms.octoai_endpoint import OctoAIEndpoint
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+
 
 app = Flask(__name__)
 CORS(app)
@@ -16,11 +19,10 @@ CORS(app)
 story = ""
 
 def run_llm_model(p_url, p_prompt):
-
+    global story
     load_dotenv()
     OCTOAI_API_TOKEN = os.environ["OCTOAI_API_TOKEN"]
-
-    from langchain_text_splitters import RecursiveCharacterTextSplitter, HTMLHeaderTextSplitter
+    TOKENIZERS_PARALLELISM = os.environ["TOKENIZERS_PARALLELISM"]
 
     headers_to_split_on = [
         ("h1", "Header 1"),
@@ -60,14 +62,16 @@ def run_llm_model(p_url, p_prompt):
         splits,
         embedding=embeddings
     )
-    splits_story = text_splitter.split_text(story)
-    vector_store_story = FAISS.from_texts(
-        splits_story,
-        embedding=embeddings
-    )
+    if (story != ""):
+        splits_story = text_splitter.split_text(story)
+        vector_store_story = FAISS.from_texts(
+            splits_story,
+            embedding=embeddings
+        )
+        story_retriever = vector_store_story.as_retriever()
 
     retriever = vector_store.as_retriever()
-    story_retriever = vector_store_story.as_retriever()
+    
 
     if (story != ""):
         template="""You are a creative storyteller helping weave a story. Continue the 'Story' using 'Hint', you can use 'Context' if present. Use three sentences maximum and keep the answer concise. Do not mention anything else other than the story.
@@ -82,19 +86,29 @@ def run_llm_model(p_url, p_prompt):
         Answer:"""
     prompt = ChatPromptTemplate.from_template(template)
 
-
-    chain = (
-        {"context": retriever, "story_retriever":story_retriever, "hint": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
+    if (story != ""):
+        chain = (
+            {"context": retriever, "story_retriever":story_retriever, "hint": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+    else:
+        chain = (
+            {"context": retriever, "hint": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+        
 
     buffer_response = chain.invoke(p_prompt)
     print(buffer_response)
 
     story = story + buffer_response
     print(story)
+
+    return buffer_response
 
 
 @app.route('/api/greet', methods=['GET'])
